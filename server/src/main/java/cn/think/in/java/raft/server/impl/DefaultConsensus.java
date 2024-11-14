@@ -144,6 +144,9 @@ public class DefaultConsensus implements Consensus {
                     node.peerSet.getSelf(), node.currentTerm, param.getTerm(), param.getServerId());
                 // 认怂
                 node.status = NodeStatus.FOLLOWER;
+                // 同时应该重置votedFor为""，这相当于是leader已经被选举出来了，旧的votedFor应该舍弃，
+                // 这也是为了下一次选举做准备的(防止下一次选举的时候VotedFor都有值，导致的选举时间过长)。
+                node.setVotedForInNodeAndMachine("");
             }
             // 使用对方的 term.
             node.setCurrentTerm(param.getTerm());
