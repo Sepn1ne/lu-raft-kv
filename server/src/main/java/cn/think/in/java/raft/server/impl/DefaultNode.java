@@ -50,7 +50,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 public class DefaultNode implements Node, ClusterMembershipChanges {
 
     /** 选举时间间隔基数 */
-    public volatile long electionTime = 15 * 1000;
+    public volatile long electionTime = 5 * 1000;
     /** 上一次选举时间 */
     public volatile long preElectionTime = 0;
 
@@ -536,15 +536,18 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
 
             long current = System.currentTimeMillis();
             // 基于 RAFT 的随机时间,解决冲突.
-            electionTime = electionTime + ThreadLocalRandom.current().nextInt(50);
-            if (current - preElectionTime < electionTime) {
+            long virtualElectionTime = electionTime + ThreadLocalRandom.current().nextInt(500);
+            //electionTime = electionTime + ThreadLocalRandom.current().nextInt(50);
+            if (current - preElectionTime < virtualElectionTime) {
+                //log.info("选举未超时...");
                 return;
             }
+            //log.info("选举超时...");
             status = NodeStatus.CANDIDATE;
             log.error("node {} will become CANDIDATE and start election leader, current term : [{}], LastEntry : [{}]",
                     peerSet.getSelf(), currentTerm, logModule.getLast());
 
-            preElectionTime = System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(200) + 150;
+            preElectionTime = System.currentTimeMillis();
 
             currentTerm = currentTerm + 1;
             // 推荐自己.
@@ -646,7 +649,7 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
                 setVotedForInNodeAndMachine("");
             }
             // 再次更新选举时间
-            preElectionTime = System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(200) + 150;
+            preElectionTime = System.currentTimeMillis();
 
         }
     }

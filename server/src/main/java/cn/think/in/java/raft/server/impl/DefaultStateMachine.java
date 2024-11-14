@@ -141,7 +141,7 @@ public class DefaultStateMachine implements StateMachine {
         }
     }
 
-    //当使用TransactionDB的时候，所有正在修改的RocksDB里的key都会被上锁，因此可以不适用synchronized关键字
+    //当使用TransactionDB的时候，所有正在修改的RocksDB里的key都会被上锁，因此可以不使用synchronized关键字
     //但是在高并发的情况下，可能两个线程的apply顺序会发生变化，因此应该在调用apply的方法中，对可能存在的并发操作进行同步。
     @Override
     public void apply(LogEntry logEntry) {
@@ -162,6 +162,7 @@ public class DefaultStateMachine implements StateMachine {
         ) {
             transaction = machineDb.beginTransaction(writeOptions, transactionOptions);
             writeOptions.setSync(true);
+            //将给状态机添加键值对的操作与更新lastApplied操作打包成事务
             transaction.put(key.getBytes(), JSON.toJSONBytes(logEntry));
             //测试事务
             //System.exit(1);

@@ -28,15 +28,15 @@ import org.rocksdb.RocksIterator;
  * @author 莫那·鲁道
  */
 public class DefaultStateMachineTest {
-    DefaultStateMachine machine = DefaultStateMachine.getInstance();
+    static DefaultStateMachine machine = DefaultStateMachine.getInstance();
 
-    // static {
-    //     System.setProperty("serverPort", "8777");
-    //     machine.dbDir = "./rocksDB-raft/" + System.getProperty("serverPort");
-    //
-    //     //machine.dbDir = "/Users/cxs/code/lu-raft-revert/rocksDB-raft/" + System.getProperty("serverPort");
-    //     machine.stateMachineDir = machine.dbDir + "/stateMachine";
-    // }
+    static {
+        System.setProperty("serverPort", "8777");
+        machine.dbDir = "./rocksDB-raft/" + System.getProperty("serverPort");
+
+        //machine.dbDir = "/Users/cxs/code/lu-raft-revert/rocksDB-raft/" + System.getProperty("serverPort");
+        machine.stateMachineDir = machine.dbDir + "/stateMachine";
+    }
 
     @Before
     public void before() {
@@ -83,7 +83,7 @@ public class DefaultStateMachineTest {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        System.out.println(machine.getLastApplied());
+        printAllData();
     }
 
     //测试rocksDB的事务是否能够保证原子性：见DefaultStateMachine中的System.exit(1)
@@ -93,13 +93,14 @@ public class DefaultStateMachineTest {
     }
 
     //输出状态机的数据
-    @Test
     public void printAllData(){
-        System.out.println(machine.getLastApplied());
         RocksIterator rocksIterator = machine.machineDb.newIterator();
+        int cnt = 0;
         for(rocksIterator.seekToFirst(); rocksIterator.isValid(); rocksIterator.next()){
             System.out.println(new String(rocksIterator.key()) + ":" + new String(rocksIterator.value()));
+            cnt++;
         }
+        System.out.println("total:" + cnt);
     }
 
 

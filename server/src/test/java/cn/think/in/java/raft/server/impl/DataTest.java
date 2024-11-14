@@ -38,7 +38,7 @@ public class DataTest {
         }
         RocksIterator rocksIterator = rocksDB.newIterator();
         int count = 1;
-        System.out.println("==================端口号为: " + 8775 +"的结点的日志如下:===================");
+        System.out.println("==================端口号为: " + node +"的结点的日志如下:===================");
         for(rocksIterator.seekToFirst();rocksIterator.isValid();rocksIterator.next()){
             String key = new String(rocksIterator.key());
             String value = new String(rocksIterator.value());

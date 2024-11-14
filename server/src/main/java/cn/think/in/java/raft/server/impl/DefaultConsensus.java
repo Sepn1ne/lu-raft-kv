@@ -98,6 +98,7 @@ public class DefaultConsensus implements Consensus {
                 node.peerSet.setLeader(new Peer(param.getCandidateId()));
                 node.setCurrentTerm(param.getTerm());
                 node.setVotedForInNodeAndMachine(param.getCandidateId());
+                node.setPreElectionTime(System.currentTimeMillis());
                 // 返回成功
                 return builder.term(node.currentTerm).voteGranted(true).build();
             }
@@ -159,13 +160,13 @@ public class DefaultConsensus implements Consensus {
                 // 处理 leader 已提交但未应用到状态机的日志
 
                 // 下一个需要提交的日志的索引（如有）
-                long nextCommit = node.getCommitIndex() + 1;
+                long nextCommit = node.stateMachine.getLastApplied() + 1;
 
                 //如果 leaderCommit > commitIndex，令 commitIndex 等于 leaderCommit 和 新日志条目索引值中较小的一个
                 if (param.getLeaderCommit() > node.getCommitIndex()) {
                     int commitIndex = (int) Math.min(param.getLeaderCommit(), node.getLogModule().getLastIndex());
                     node.setCommitIndex(commitIndex);
-                    node.setLastApplied(commitIndex);
+                    //node.setLastApplied(commitIndex);
                 }
 
                 while (nextCommit <= node.getCommitIndex()){
@@ -173,6 +174,8 @@ public class DefaultConsensus implements Consensus {
                     node.stateMachine.apply(node.logModule.read(nextCommit));
                     nextCommit++;
                 }
+                node.setLastApplied(node.getCommitIndex());
+
                 return AentryResult.newBuilder().term(node.getCurrentTerm()).success(true).build();
             }
 
@@ -211,7 +214,7 @@ public class DefaultConsensus implements Consensus {
             }
 
             // 下一个需要提交的日志的索引（如有）
-            long nextCommit = node.getCommitIndex() + 1;
+            long nextCommit = node.stateMachine.getLastApplied() + 1;
 
             //如果 leaderCommit > commitIndex，令 commitIndex 等于 leaderCommit 和 新日志条目索引值中较小的一个
             if (param.getLeaderCommit() > node.getCommitIndex()) {
