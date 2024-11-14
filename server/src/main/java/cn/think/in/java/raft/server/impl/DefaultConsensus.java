@@ -97,7 +97,7 @@ public class DefaultConsensus implements Consensus {
                 // 更新
                 node.peerSet.setLeader(new Peer(param.getCandidateId()));
                 node.setCurrentTerm(param.getTerm());
-                node.setVotedFor(param.getServerId());
+                node.setVotedForInNodeAndMachine(param.getCandidateId());
                 // 返回成功
                 return builder.term(node.currentTerm).voteGranted(true).build();
             }
@@ -214,7 +214,7 @@ public class DefaultConsensus implements Consensus {
             if (param.getLeaderCommit() > node.getCommitIndex()) {
                 int commitIndex = (int) Math.min(param.getLeaderCommit(), node.getLogModule().getLastIndex());
                 node.setCommitIndex(commitIndex);
-                node.setLastApplied(commitIndex);
+                //node.setLastApplied(commitIndex);
             }
 
             while (nextCommit <= node.getCommitIndex()){
@@ -222,6 +222,7 @@ public class DefaultConsensus implements Consensus {
                 node.stateMachine.apply(node.logModule.read(nextCommit));
                 nextCommit++;
             }
+            node.setLastApplied(node.getCommitIndex());
 
             result.setTerm(node.getCurrentTerm());
 

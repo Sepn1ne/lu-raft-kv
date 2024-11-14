@@ -41,4 +41,12 @@ public interface StateMachine extends LifeCycle {
 
     void delString(String... key);
 
+    long getLastApplied();
+
+    void setVotedFor(String votedFor);
+
+    String getVotedFor();
+
+
+
 }

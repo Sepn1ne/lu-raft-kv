@@ -120,4 +120,22 @@ public class RedisStateMachine implements StateMachine {
             throw new RuntimeException(e);
         }
     }
+
+    //TODO
+    @Override
+    public long getLastApplied() {
+        return 0;
+    }
+
+    //TODO
+    @Override
+    public void setVotedFor(String votedFor) {
+
+    }
+
+    //TODO
+    @Override
+    public String getVotedFor() {
+        return null;
+    }
 }

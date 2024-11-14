@@ -17,10 +17,7 @@ limitations under the License.
 package cn.think.in.java.raft.server.impl;
 
 import cn.think.in.java.raft.common.entity.*;
-import cn.think.in.java.raft.server.Consensus;
-import cn.think.in.java.raft.server.LogModule;
-import cn.think.in.java.raft.server.Node;
-import cn.think.in.java.raft.server.StateMachine;
+import cn.think.in.java.raft.server.*;
 import cn.think.in.java.raft.server.changes.ClusterMembershipChanges;
 import cn.think.in.java.raft.server.changes.Result;
 import cn.think.in.java.raft.common.RaftRemotingException;
@@ -153,15 +150,18 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
         delegate = new ClusterMembershipChangesImpl(this);
 
         RaftThreadPool.scheduleWithFixedDelay(heartBeatTask, 500);
-        RaftThreadPool.scheduleAtFixedRate(electionTask, 6000, 500);
+        RaftThreadPool.scheduleAtFixedRate(electionTask, 6000, 100);
         RaftThreadPool.execute(replicationFailQueueConsumer);
 
         LogEntry logEntry = logModule.getLast();
         if (logEntry != null) {
             currentTerm = logEntry.getTerm();
         }
-
-        log.info("start success, selfId : {} ", peerSet.getSelf());
+        //由于votedFor也是持久化的,默认为""
+        votedFor = stateMachine.getVotedFor();
+        //由于采用了RocksDB存储状态机，因此状态机是持久化到磁盘中的，故此处应该将lastApplied也持久化，默认为0
+        lastApplied = stateMachine.getLastApplied();
+        log.info("start success, selfId : {} , currentTerm : {}, votedFor : {}, lastApplied : {} ", peerSet.getSelf(), currentTerm, votedFor, lastApplied);
     }
 
     @Override
@@ -303,7 +303,13 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
             // 更新
             commitIndex = logEntry.getIndex();
             //  应用到状态机
-            getStateMachine().apply(logEntry);
+            //  此处应该从lastApplied+1到commitIndex的所有非no-op日志都提交到状态机
+            for(long i = lastApplied+1;i<=commitIndex;i++){
+                LogEntry curLog = logModule.read(i);
+                if(curLog.getCommand() != null){
+                    getStateMachine().apply(logModule.read(i));
+                }
+            }
             lastApplied = commitIndex;
 
             log.info("success apply local state machine,  logEntry info : {}", logEntry);
@@ -542,7 +548,7 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
 
             currentTerm = currentTerm + 1;
             // 推荐自己.
-            votedFor = peerSet.getSelf().getAddr();
+            setVotedForInNodeAndMachine(peerSet.getSelf().getAddr());
 
             List<Peer> peers = peerSet.getPeersWithOutSelf();
 
@@ -576,7 +582,7 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
                     try {
                         return getRpcClient().<RvoteResult>send(request);
                     } catch (RaftRemotingException e) {
-                        log.error("ElectionTask RPC Fail , URL : " + request.getUrl());
+                        log.error("ElectionTask RPC Fail , URL : " + request.getUrl(),e);
                         return null;
                     }
                 }));
@@ -633,11 +639,11 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
                 log.warn("node {} become leader ", peerSet.getSelf());
                 status = NodeStatus.LEADER;
                 peerSet.setLeader(peerSet.getSelf());
-                votedFor = "";
+                setVotedForInNodeAndMachine("");
                 becomeLeaderToDoThing();
             } else {
                 // else 重新选举
-                votedFor = "";
+                setVotedForInNodeAndMachine("");
             }
             // 再次更新选举时间
             preElectionTime = System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(200) + 150;
@@ -719,20 +725,27 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
             // 更新
             commitIndex = logEntry.getIndex();
             //  应用到状态机
-            getStateMachine().apply(logEntry);
+            //  此处应该从lastApplied+1到commitIndex的所有非no-op日志都提交到状态机
+            //  考虑将lastApplied持久化，以防止结点重启后的重复提交。
+            for(long i = lastApplied+1;i<=commitIndex;i++){
+                LogEntry curLog = logModule.read(i);
+                if(curLog.getCommand() != null){
+                    getStateMachine().apply(logModule.read(i));
+                }
+            }
             lastApplied = commitIndex;
 
             log.info("success apply local state machine,  logEntry info : {}", logEntry);
         } else {
             // 回滚已经提交的日志
             logModule.removeOnStartIndex(logEntry.getIndex());
-            log.warn("fail apply local state  machine,  logEntry info : {}", logEntry);
+            log.warn("fail apply local state  machine, logEntry info : {}", logEntry);
 
             // 无法提交空日志，让出领导者位置
             log.warn("node {} becomeLeaderToDoThing fail ", peerSet.getSelf());
             status = NodeStatus.FOLLOWER;
             peerSet.setLeader(null);
-            votedFor = "";
+            setVotedForInNodeAndMachine("");
         }
 
     }
@@ -782,7 +795,7 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
                         if (term > currentTerm) {
                             log.error("self will become follower, he's term : {}, my term : {}", term, currentTerm);
                             currentTerm = term;
-                            votedFor = "";
+                            setVotedForInNodeAndMachine("");
                             status = NodeStatus.FOLLOWER;
                         }
                     } catch (Exception e) {
@@ -791,6 +804,11 @@ public class DefaultNode implements Node, ClusterMembershipChanges {
                 }, false);
             }
         }
+    }
+
+    public void setVotedForInNodeAndMachine(String v){
+        this.votedFor = v;
+        stateMachine.setVotedFor(v);
     }
 
     @Override
